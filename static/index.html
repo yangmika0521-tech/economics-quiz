@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="經濟學 互動式評量與題庫測驗系統 - 支援行動端響應式體驗 (RWD) 與 GitHub Pages 雙運行架構">
+  <meta name="theme-color" content="#2563eb">
+  <title>經濟學 互動式評量與題庫測驗系統</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
+  <link rel="stylesheet" href="./static/css/style.css" onerror="this.onerror=null;this.href='./css/style.css';">
+</head>
+<body>
+  <!-- Global Application Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <span class="brand-icon">📈</span>
+        <div class="brand-text">
+          <h1 class="brand-title">經濟學 互動式評量與題庫測驗系統</h1>
+          <p class="brand-subtitle">Economics Interactive Evaluation & Quiz Practice System</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span id="runtime-badge" class="runtime-badge badge-detecting" title="運行架構狀態">
+          <span class="badge-dot"></span>
+          <span class="badge-text">連線偵測中...</span>
+        </span>
+        <button id="btn-nav-home" class="btn-icon hidden" title="返回設定首頁" aria-label="返回設定首頁">
+          🏠 設定
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main View Container -->
+  <main class="main-content">
+    
+    <!-- ================================================================= -->
+    <!-- VIEW 1: SETUP / CONFIGURATION VIEW                                -->
+    <!-- ================================================================= -->
+    <section id="view-setup" class="view-section active">
+      <div class="setup-container">
+        
+        <!-- Welcome & System Banner -->
+        <div class="card intro-card">
+          <div class="intro-header">
+            <span class="intro-badge">標準題庫 585 題</span>
+            <h2>🎯 測驗與練習配置</h2>
+          </div>
+          <p class="intro-desc">
+            收錄個體經濟學基礎核心章節（Ch 1 至 Ch 6）完整多選試題，支援高解析圖表解析、作答時間紀錄、未答防呆機制與繁體中文詳細考點診斷。
+          </p>
+        </div>
+
+        <!-- Chapter Selection Card -->
+        <div class="card config-card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">1. 選擇測驗章節範圍</h3>
+              <p class="card-subtitle">請勾選欲測驗的章節，可單選、複選或全選</p>
+            </div>
+            <div class="pool-stat">
+              可抽選題庫：<strong id="pool-count">0</strong> 題
+            </div>
+          </div>
+
+          <!-- Quick Selector Buttons -->
+          <div class="quick-selectors">
+            <button type="button" id="btn-select-all" class="btn-chip active">全選 (Ch 1-6)</button>
+            <button type="button" id="btn-select-ch1-3" class="btn-chip">Ch 1-3 個體基礎</button>
+            <button type="button" id="btn-select-ch4-6" class="btn-chip">Ch 4-6 市場與彈性</button>
+            <button type="button" id="btn-select-reset" class="btn-chip btn-chip-reset">重設</button>
+          </div>
+
+          <!-- Chapter Grid -->
+          <div id="chapter-list" class="chapter-grid" role="group" aria-label="章節選擇清單">
+            <!-- Dynamically populated chapters -->
+            <div class="loading-state">
+              <span class="spinner"></span> 載入題庫章節中...
+            </div>
+          </div>
+        </div>
+
+        <!-- Quiz Parameters Card -->
+        <div class="card config-card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">2. 抽取題數與模式設定</h3>
+              <p class="card-subtitle">設定隨機不重複抽選題數與作答評量模式</p>
+            </div>
+          </div>
+
+          <!-- Question Count Selection -->
+          <div class="form-group">
+            <div class="label-row">
+              <label for="input-count" class="form-label">抽選題目數量：</label>
+              <div class="count-value-display">
+                <span id="count-display" class="highlight-number">20</span> 題
+              </div>
+            </div>
+
+            <div class="slider-container">
+              <input type="range" id="slider-count" min="1" max="100" value="20" class="range-slider" aria-label="抽選題數拉桿">
+              <input type="number" id="input-count" min="1" max="100" value="20" class="number-input" aria-label="抽選題數數值輸入">
+            </div>
+
+            <!-- Quick Count Chips -->
+            <div class="count-chips">
+              <button type="button" class="btn-count-chip" data-count="10">10 題</button>
+              <button type="button" class="btn-count-chip active" data-count="20">20 題</button>
+              <button type="button" class="btn-count-chip" data-count="30">30 題</button>
+              <button type="button" class="btn-count-chip" data-count="50">50 題</button>
+              <button type="button" id="btn-count-all" class="btn-count-chip" data-count="all">全選目前題庫</button>
+            </div>
+          </div>
+
+          <!-- Mode Selector -->
+          <div class="form-group">
+            <label class="form-label">測驗模式選擇：</label>
+            <div class="mode-grid">
+              <label class="mode-card">
+                <input type="radio" name="quiz-mode" value="practice" checked>
+                <div class="mode-card-content">
+                  <div class="mode-header">
+                    <span class="mode-icon">📖</span>
+                    <strong class="mode-title">練習模式 (Practice)</strong>
+                  </div>
+                  <p class="mode-desc">自主練習導向，自由前後翻閱、標記疑難題目，交卷後提供完整詳析。</p>
+                </div>
+              </label>
+
+              <label class="mode-card">
+                <input type="radio" name="quiz-mode" value="exam">
+                <div class="mode-card-content">
+                  <div class="mode-header">
+                    <span class="mode-icon">⏱️</span>
+                    <strong class="mode-title">正式測驗 (Exam)</strong>
+                  </div>
+                  <p class="mode-desc">模擬正式考試，計制作答時間，交卷前嚴格防護答案，提供分章績效診斷。</p>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Row -->
+        <div class="start-action-row">
+          <button type="button" id="btn-start-quiz" class="btn btn-primary btn-lg btn-start">
+            🚀 開始測驗 (Start Quiz)
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- ================================================================= -->
+    <!-- VIEW 2: INTERACTIVE QUIZ VIEW                                     -->
+    <!-- ================================================================= -->
+    <section id="view-quiz" class="view-section">
+      <div class="quiz-container">
+        
+        <!-- Quiz Control Bar -->
+        <div class="quiz-control-bar card">
+          <div class="quiz-status-row">
+            <div class="status-left">
+              <span id="quiz-mode-tag" class="tag tag-mode">練習模式</span>
+              <span id="current-q-chapter" class="tag tag-chapter">第 1 章</span>
+              <span class="q-progress-text">第 <strong id="current-q-num">1</strong> / <span id="total-q-num">20</span> 題</span>
+            </div>
+            <div class="status-right">
+              <div class="timer-box" title="作答時間">
+                <span class="timer-icon">⏱️</span>
+                <span id="quiz-timer" class="timer-text">00:00</span>
+              </div>
+              <button type="button" id="btn-flag-q" class="btn-flag" title="標記本題以便稍後回顧 (快速鍵: F)">
+                <span class="flag-icon">🚩</span>
+                <span id="flag-text" class="flag-label">標記此題</span>
+              </button>
+              <button type="button" id="btn-toggle-palette" class="btn-palette" title="開啟題號抽屜清單">
+                <span>📑 題號</span>
+                <span id="palette-summary-count" class="badge-count">0/20</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="progress-track" aria-label="測驗作答進度">
+            <div id="quiz-progress-bar" class="progress-fill" style="width: 5%;"></div>
+          </div>
+        </div>
+
+        <!-- Question Body Card -->
+        <div id="question-card" class="card question-card">
+          <!-- Question Stem -->
+          <div class="question-stem-container">
+            <div class="stem-header">
+              <span class="stem-number-badge">Q<span id="stem-q-number">1</span></span>
+              <div id="question-stem" class="stem-text">題目載入中...</div>
+            </div>
+          </div>
+
+          <!-- Context Markdown Table (if question has context table) -->
+          <div id="question-context-table" class="context-table-wrapper hidden"></div>
+
+          <!-- Diagram Image (if question has diagram) -->
+          <div id="question-diagram-container" class="diagram-container hidden">
+            <div class="diagram-box">
+              <img id="question-diagram-img" src="" alt="經濟學考題圖表" class="diagram-img" loading="lazy">
+              <div class="diagram-zoom-hint">
+                <span>🔍 點擊放大圖表檢視</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Options Container -->
+          <div id="question-options" class="options-container" role="radiogroup" aria-label="題目選項">
+            <!-- Populated dynamically: A, B, C, D -->
+          </div>
+        </div>
+
+        <!-- Quiz Navigation Controls -->
+        <div class="quiz-nav-bar">
+          <button type="button" id="btn-prev-q" class="btn btn-secondary btn-nav" disabled>
+            ⬅️ 上一題 <span class="shortcut-hint">[P / ←]</span>
+          </button>
+          
+          <button type="button" id="btn-submit-quiz" class="btn btn-warning btn-nav btn-submit">
+            📋 立即交卷
+          </button>
+
+          <button type="button" id="btn-next-q" class="btn btn-primary btn-nav">
+            下一題 ➡️ <span class="shortcut-hint">[N / →]</span>
+          </button>
+        </div>
+
+        <!-- Keyboard Shortcut Hint Footer -->
+        <footer class="shortcut-footer">
+          <span class="shortcut-item"><kbd>A</kbd> / <kbd>B</kbd> / <kbd>C</kbd> / <kbd>D</kbd> 或 <kbd>1</kbd> - <kbd>4</kbd> 選擇選項</span>
+          <span class="shortcut-divider">|</span>
+          <span class="shortcut-item"><kbd>←</kbd> / <kbd>P</kbd> 上一題</span>
+          <span class="shortcut-divider">|</span>
+          <span class="shortcut-item"><kbd>→</kbd> / <kbd>N</kbd> 下一題</span>
+          <span class="shortcut-divider">|</span>
+          <span class="shortcut-item"><kbd>F</kbd> 標記/取消標記</span>
+        </footer>
+
+      </div>
+    </section>
+
+
+    <!-- ================================================================= -->
+    <!-- VIEW 3: SCORE & DIAGNOSTIC REVIEW VIEW                           -->
+    <!-- ================================================================= -->
+    <section id="view-review" class="view-section">
+      <div class="review-container">
+        
+        <!-- Score Summary Hero Card -->
+        <div class="card summary-card">
+          <div class="summary-hero">
+            <div class="score-display">
+              <span class="score-label">測驗得分</span>
+              <div class="score-numbers">
+                <span id="review-score-num" class="score-correct">0</span>
+                <span class="score-divider">/</span>
+                <span id="review-total-num" class="score-total">0</span>
+              </div>
+              <div class="score-pct-badge">
+                正確率：<strong id="review-percentage">0.0%</strong>
+              </div>
+            </div>
+
+            <div class="summary-details">
+              <div id="review-tier-badge" class="tier-badge tier-good">
+                🎯 測驗完成
+              </div>
+              <div class="meta-stats">
+                <div class="meta-item">
+                  <span class="meta-icon">⏱️</span>
+                  <span>總耗時：<strong id="review-time-elapsed">00:00</strong></span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-icon">📊</span>
+                  <span>測驗模式：<strong id="review-mode-label">練習模式</strong></span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-icon">🚩</span>
+                  <span>標記題目：<strong id="review-flagged-count">0</strong> 題</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chapter Breakdown Progress -->
+          <div class="chapter-breakdown-wrapper">
+            <h4 class="breakdown-title">📚 各章節答對率分項診斷</h4>
+            <div id="chapter-breakdown-list" class="breakdown-grid">
+              <!-- Dynamically populated chapter bars -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter & Action Controls -->
+        <div class="review-action-toolbar card">
+          <div class="review-filters" role="group" aria-label="複習篩選">
+            <button type="button" id="btn-filter-all" class="btn-filter active">
+              全部題目 (<span id="filter-all-count">0</span>)
+            </button>
+            <button type="button" id="btn-filter-wrong" class="btn-filter">
+              ❌ 僅看錯題 (<span id="filter-wrong-count">0</span>)
+            </button>
+            <button type="button" id="btn-filter-flagged" class="btn-filter">
+              🚩 僅看標記題 (<span id="filter-flagged-count">0</span>)
+            </button>
+          </div>
+
+          <div class="review-actions">
+            <button type="button" id="btn-practice-missed" class="btn btn-warning">
+              🔁 錯題重練 (Practice Missed Only)
+            </button>
+            <button type="button" id="btn-new-quiz" class="btn btn-secondary">
+              🆕 重新配置測驗
+            </button>
+          </div>
+        </div>
+
+        <!-- Detailed Review List -->
+        <div id="review-list" class="review-list-container">
+          <!-- Populated dynamically with diagnostic cards -->
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+
+  <!-- =================================================================== -->
+  <!-- MODAL 1: QUESTION PALETTE DRAWER                                    -->
+  <!-- =================================================================== -->
+  <div id="palette-drawer" class="drawer-overlay" aria-hidden="true">
+    <div id="palette-backdrop" class="drawer-backdrop"></div>
+    <aside class="drawer-panel" role="dialog" aria-label="題號快速導覽抽屜">
+      <div class="drawer-header">
+        <div class="drawer-title-group">
+          <h3 class="drawer-title">📑 題目導覽清單</h3>
+          <span id="drawer-stats" class="drawer-stats">已答 0 / 20 題</span>
+        </div>
+        <button type="button" id="btn-close-palette" class="btn-close" aria-label="關閉題號抽屜">✕</button>
+      </div>
+
+      <!-- Legend -->
+      <div class="palette-legend">
+        <span class="legend-item"><span class="legend-box box-current"></span> 當前題目</span>
+        <span class="legend-item"><span class="legend-box box-answered"></span> 已作答</span>
+        <span class="legend-item"><span class="legend-box box-unanswered"></span> 未填答</span>
+        <span class="legend-item"><span class="legend-box box-flagged"></span> 標記題 🚩</span>
+      </div>
+
+      <!-- Palette Grid Buttons -->
+      <div id="palette-grid" class="palette-grid-container">
+        <!-- Buttons 1..N dynamically generated -->
+      </div>
+    </aside>
+  </div>
+
+
+  <!-- =================================================================== -->
+  <!-- MODAL 2: SUBMISSION GUARDRAIL MODAL                                 -->
+  <!-- =================================================================== -->
+  <div id="guardrail-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true">
+    <div id="guardrail-backdrop" class="modal-backdrop"></div>
+    <div class="modal-box modal-warning">
+      <div class="modal-header">
+        <span class="modal-icon">⚠️</span>
+        <h3 class="modal-title">未作答防呆提醒</h3>
+      </div>
+      <div class="modal-body">
+        <p class="modal-alert-text">
+          測驗尚未完全填答！您還有 <strong id="guardrail-count" class="alert-highlight">0</strong> 題尚未作答。
+        </p>
+        <div class="unanswered-chips-box">
+          <span class="chips-label">未填答題號：</span>
+          <div id="guardrail-list" class="unanswered-chips">
+            <!-- Question chips -->
+          </div>
+        </div>
+        <p class="modal-subtext">確定現在就要提交試卷並結算成績嗎？</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-guardrail-cancel" class="btn btn-primary btn-guardrail">
+          ✏️ 繼續作答 (Return to Quiz)
+        </button>
+        <button type="button" id="btn-guardrail-confirm" class="btn btn-outline-danger btn-guardrail">
+          📋 確認交卷 (Submit Anyway)
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- =================================================================== -->
+  <!-- MODAL 3: DIAGRAM ZOOM LIGHTBOX MODAL                                -->
+  <!-- =================================================================== -->
+  <div id="diagram-modal" class="modal-overlay lightbox-overlay" aria-hidden="true" role="dialog" aria-modal="true">
+    <div id="diagram-backdrop" class="modal-backdrop"></div>
+    <div class="lightbox-content">
+      <button type="button" id="btn-close-diagram" class="lightbox-close" aria-label="關閉放大圖表">✕</button>
+      <div class="lightbox-img-wrapper">
+        <img id="diagram-modal-img" src="" alt="放大圖表" class="lightbox-img">
+      </div>
+      <p id="diagram-modal-caption" class="lightbox-caption">經濟學試題圖表</p>
+    </div>
+  </div>
+
+  <!-- Client-Side State Machine & Logic -->
+  <script src="./static/js/app.js" onerror="this.onerror=null;this.src='./js/app.js';"></script>
+</body>
+</html>

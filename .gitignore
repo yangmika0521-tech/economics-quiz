@@ -1,0 +1,7 @@
+.agents/
+orchestrator_gen3/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+.env
