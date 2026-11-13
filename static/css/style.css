@@ -1939,3 +1939,224 @@ button {
     gap: 0.5rem;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Learning Progress Dashboard, Wrong Book & Score History Modals
+   -------------------------------------------------------------------------- */
+.progress-dashboard-card {
+  border-top: 4px solid var(--color-primary);
+}
+
+.progress-action-btns {
+  margin-top: 0;
+}
+
+.bank-completion-box {
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.completion-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.88rem;
+}
+
+.completion-label {
+  font-weight: 700;
+  color: var(--color-text-main);
+}
+
+.completion-stat-text {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.highlight-pct {
+  color: var(--color-primary);
+  font-size: 1rem;
+}
+
+.completion-track {
+  height: 10px;
+  background-color: #e2e8f0;
+}
+
+.completion-fill {
+  background: linear-gradient(90deg, #10b981 0%, #2563eb 100%);
+}
+
+.progress-stats-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.65rem;
+}
+
+@media (min-width: 560px) {
+  .progress-stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.stat-pill {
+  background-color: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.65rem 0.85rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.stat-pill-label {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.stat-pill-value {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--color-text-main);
+}
+
+.stat-value-danger {
+  color: var(--color-danger);
+}
+
+/* Chapter Card Completion Mini Bar */
+.chapter-progress-row {
+  margin-top: 0.5rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed var(--color-border);
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.chapter-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+.chapter-mini-track {
+  height: 5px;
+  background-color: #e2e8f0;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.chapter-mini-fill {
+  height: 100%;
+  background-color: var(--color-success);
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+
+/* Large Scrollable Modals for Wrong Book & Score History */
+.modal-large {
+  max-width: 780px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem;
+}
+
+.modal-header-between {
+  justify-content: space-between;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.modal-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.modal-scroll-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-right: 0.25rem;
+}
+
+.history-record-card {
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.history-record-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.history-record-date {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.history-record-chapters {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--color-text-main);
+}
+
+.history-record-score {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.btn-mastered {
+  min-height: 36px;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-success-border);
+  background-color: var(--color-success-light);
+  color: var(--color-success);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-mastered:hover {
+  background-color: var(--color-success);
+  color: #ffffff;
+}
+

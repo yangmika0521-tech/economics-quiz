@@ -52,6 +52,54 @@
           </p>
         </div>
 
+        <!-- Learning Progress & History Dashboard Card -->
+        <div id="progress-dashboard-card" class="card config-card progress-dashboard-card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">📊 學習進度與歷史紀錄</h3>
+              <p class="card-subtitle">自動永久保存於瀏覽器本地空間，按 F5 重新整理或關閉網頁皆不會消失</p>
+            </div>
+            <div class="quick-selectors progress-action-btns">
+              <button type="button" id="btn-open-wrong-book" class="btn-chip">
+                📕 歷史錯題本 (<span id="stat-wrong-book-count">0</span>)
+              </button>
+              <button type="button" id="btn-open-score-history" class="btn-chip">
+                📜 歷史成績 (<span id="stat-history-count">0</span>)
+              </button>
+            </div>
+          </div>
+
+          <!-- Overall Question Bank Completion Progress -->
+          <div class="bank-completion-box">
+            <div class="completion-header-row">
+              <span class="completion-label">🎯 題庫刷題總進度（已刷題數 / 總題數）</span>
+              <span class="completion-stat-text">
+                已刷 <strong id="stat-attempted-count">0</strong> / <span id="stat-bank-total">585</span> 題
+                (<strong id="stat-completion-pct" class="highlight-pct">0.0%</strong>)
+              </span>
+            </div>
+            <div class="progress-track completion-track" aria-label="題庫總刷題進度">
+              <div id="bank-completion-bar" class="progress-fill completion-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <!-- Quick Summary Metrics -->
+          <div class="progress-stats-grid">
+            <div class="stat-pill">
+              <span class="stat-pill-label">累計測驗次數</span>
+              <strong id="stat-total-sessions" class="stat-pill-value">0 次</strong>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-pill-label">歷史平均正確率</span>
+              <strong id="stat-avg-score" class="stat-pill-value">--%</strong>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-pill-label">累積待複習錯題</span>
+              <strong id="stat-wrong-count-pill" class="stat-pill-value stat-value-danger">0 題</strong>
+            </div>
+          </div>
+        </div>
+
         <!-- Chapter Selection Card -->
         <div class="card config-card">
           <div class="card-header">
@@ -111,6 +159,22 @@
               <button type="button" class="btn-count-chip" data-count="30">30 題</button>
               <button type="button" class="btn-count-chip" data-count="50">50 題</button>
               <button type="button" id="btn-count-all" class="btn-count-chip" data-count="all">全選目前題庫</button>
+            </div>
+          </div>
+
+          <!-- Pool Filter Selector (All / Unseen / Historical Wrong) -->
+          <div class="form-group">
+            <label class="form-label">抽題題庫篩選：</label>
+            <div class="quick-selectors" role="group" aria-label="抽題題庫篩選條件">
+              <button type="button" class="btn-chip pool-filter-chip active" data-pool-filter="all">
+                📚 全部題目
+              </button>
+              <button type="button" class="btn-chip pool-filter-chip" data-pool-filter="unseen">
+                ✨ 僅抽未做過新題
+              </button>
+              <button type="button" class="btn-chip pool-filter-chip" data-pool-filter="wrong">
+                🔥 僅抽歷史錯題
+              </button>
             </div>
           </div>
 
@@ -410,6 +474,63 @@
         <img id="diagram-modal-img" src="" alt="放大圖表" class="lightbox-img">
       </div>
       <p id="diagram-modal-caption" class="lightbox-caption">經濟學試題圖表</p>
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- MODAL 4: HISTORICAL WRONG QUESTION BOOK MODAL                       -->
+  <!-- =================================================================== -->
+  <div id="wrong-book-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true">
+    <div id="wrong-book-backdrop" class="modal-backdrop"></div>
+    <div class="modal-box modal-large">
+      <div class="modal-header modal-header-between">
+        <div class="modal-title-group">
+          <span class="modal-icon">📕</span>
+          <div>
+            <h3 class="modal-title">歷史錯題本</h3>
+            <p class="card-subtitle">累積記錄所有曾答錯的題目與中文詳解</p>
+          </div>
+        </div>
+        <button type="button" id="btn-close-wrong-book" class="btn-close" aria-label="關閉歷史錯題本">✕</button>
+      </div>
+      <div class="modal-toolbar">
+        <button type="button" id="btn-practice-wrong-book" class="btn btn-warning">
+          🔥 立即專練歷史錯題
+        </button>
+        <button type="button" id="btn-clear-wrong-book" class="btn btn-outline-danger">
+          🗑️ 清空錯題本
+        </button>
+      </div>
+      <div id="wrong-book-list" class="modal-scroll-body">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- MODAL 5: HISTORICAL SCORE RECORDS MODAL                             -->
+  <!-- =================================================================== -->
+  <div id="score-history-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true">
+    <div id="score-history-backdrop" class="modal-backdrop"></div>
+    <div class="modal-box modal-large">
+      <div class="modal-header modal-header-between">
+        <div class="modal-title-group">
+          <span class="modal-icon">📜</span>
+          <div>
+            <h3 class="modal-title">歷史成績紀錄</h3>
+            <p class="card-subtitle">歷次測驗成績、答對率與作答耗時統計</p>
+          </div>
+        </div>
+        <button type="button" id="btn-close-score-history" class="btn-close" aria-label="關閉歷史成績紀錄">✕</button>
+      </div>
+      <div class="modal-toolbar">
+        <button type="button" id="btn-reset-all-progress" class="btn btn-outline-danger">
+          🗑️ 清除成績與刷題紀錄
+        </button>
+      </div>
+      <div id="score-history-list" class="modal-scroll-body">
+        <!-- Populated dynamically -->
+      </div>
     </div>
   </div>
 

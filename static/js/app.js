@@ -22,6 +22,7 @@
     selectedChapterIds: new Set(),
     requestedCount: 20,
     selectedMode: 'practice', // 'practice' | 'exam'
+    poolFilter: 'all',        // 'all' | 'unseen' | 'wrong'
     
     // Active Quiz Session
     currentQuiz: {
@@ -133,7 +134,173 @@
     btnCloseDiagram: document.getElementById('btn-close-diagram'),
     diagramModalImg: document.getElementById('diagram-modal-img'),
     diagramModalCaption: document.getElementById('diagram-modal-caption'),
+
+    // Progress Dashboard & Pool Filter Controls
+    btnOpenWrongBook: document.getElementById('btn-open-wrong-book'),
+    btnOpenScoreHistory: document.getElementById('btn-open-score-history'),
+    statWrongBookCount: document.getElementById('stat-wrong-book-count'),
+    statHistoryCount: document.getElementById('stat-history-count'),
+    statAttemptedCount: document.getElementById('stat-attempted-count'),
+    statBankTotal: document.getElementById('stat-bank-total'),
+    statCompletionPct: document.getElementById('stat-completion-pct'),
+    bankCompletionBar: document.getElementById('bank-completion-bar'),
+    statTotalSessions: document.getElementById('stat-total-sessions'),
+    statAvgScore: document.getElementById('stat-avg-score'),
+    statWrongCountPill: document.getElementById('stat-wrong-count-pill'),
+    poolFilterChips: document.querySelectorAll('.pool-filter-chip'),
+
+    // Modals 4 & 5: Wrong Book & Score History
+    wrongBookModal: document.getElementById('wrong-book-modal'),
+    wrongBookBackdrop: document.getElementById('wrong-book-backdrop'),
+    btnCloseWrongBook: document.getElementById('btn-close-wrong-book'),
+    btnPracticeWrongBook: document.getElementById('btn-practice-wrong-book'),
+    btnClearWrongBook: document.getElementById('btn-clear-wrong-book'),
+    wrongBookList: document.getElementById('wrong-book-list'),
+
+    scoreHistoryModal: document.getElementById('score-history-modal'),
+    scoreHistoryBackdrop: document.getElementById('score-history-backdrop'),
+    btnCloseScoreHistory: document.getElementById('btn-close-score-history'),
+    btnResetAllProgress: document.getElementById('btn-reset-all-progress'),
+    scoreHistoryList: document.getElementById('score-history-list'),
   };
+
+  // =========================================================================
+  // Persistent Storage Manager (localStorage: Progress, Wrong Book & F5 Resume)
+  // =========================================================================
+
+  const STORAGE_KEY_PROGRESS = 'econ_quiz_progress_v1';
+  const STORAGE_KEY_ACTIVE_QUIZ = 'econ_quiz_active_session_v1';
+
+  function getLocalStorage() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage;
+      }
+    } catch (e) {
+      // Ignore security / sandbox restrictions
+    }
+    return null;
+  }
+
+  function loadProgressData() {
+    const defaultData = { attemptedIds: {}, wrongBook: {}, scoreHistory: [] };
+    const store = getLocalStorage();
+    if (!store) return defaultData;
+    try {
+      const raw = store.getItem(STORAGE_KEY_PROGRESS);
+      if (!raw) return defaultData;
+      const parsed = JSON.parse(raw);
+      return {
+        attemptedIds: (parsed && typeof parsed.attemptedIds === 'object' && parsed.attemptedIds) ? parsed.attemptedIds : {},
+        wrongBook: (parsed && typeof parsed.wrongBook === 'object' && parsed.wrongBook) ? parsed.wrongBook : {},
+        scoreHistory: (parsed && Array.isArray(parsed.scoreHistory)) ? parsed.scoreHistory : [],
+      };
+    } catch (e) {
+      return defaultData;
+    }
+  }
+
+  function saveProgressData(data) {
+    const store = getLocalStorage();
+    if (!store) return;
+    try {
+      store.setItem(STORAGE_KEY_PROGRESS, JSON.stringify(data));
+    } catch (e) {
+      console.warn('[Storage] Failed to save progress data:', e);
+    }
+  }
+
+  function saveActiveQuizToStorage() {
+    const store = getLocalStorage();
+    if (!store) return;
+    try {
+      if (!state.currentQuiz || !state.currentQuiz.questions || state.currentQuiz.questions.length === 0) {
+        return;
+      }
+      const payload = {
+        sessionId: state.currentQuiz.sessionId,
+        mode: state.currentQuiz.mode,
+        questions: state.currentQuiz.questions,
+        userAnswers: state.currentQuiz.userAnswers,
+        flaggedQuestionIds: Array.from(state.currentQuiz.flaggedQuestionIds || []),
+        currentIndex: state.currentQuiz.currentIndex || 0,
+        elapsedSeconds: state.currentQuiz.elapsedSeconds || 0,
+        savedAt: Date.now(),
+      };
+      store.setItem(STORAGE_KEY_ACTIVE_QUIZ, JSON.stringify(payload));
+    } catch (e) {
+      // Ignore storage quota errors
+    }
+  }
+
+  function clearActiveQuizFromStorage() {
+    const store = getLocalStorage();
+    if (!store) return;
+    try {
+      store.removeItem(STORAGE_KEY_ACTIVE_QUIZ);
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  function tryRestoreActiveQuizFromStorage() {
+    const store = getLocalStorage();
+    if (!store) return false;
+    try {
+      const raw = store.getItem(STORAGE_KEY_ACTIVE_QUIZ);
+      if (!raw) return false;
+      const saved = JSON.parse(raw);
+      if (!saved || !Array.isArray(saved.questions) || saved.questions.length === 0) {
+        return false;
+      }
+      state.currentQuiz = {
+        sessionId: saved.sessionId || ('restored-session-' + Date.now()),
+        mode: saved.mode || 'practice',
+        questions: saved.questions,
+        userAnswers: saved.userAnswers || {},
+        flaggedQuestionIds: new Set(Array.isArray(saved.flaggedQuestionIds) ? saved.flaggedQuestionIds : []),
+        currentIndex: Math.min(Math.max(0, saved.currentIndex || 0), saved.questions.length - 1),
+        startTime: Date.now(),
+        timerInterval: null,
+        elapsedSeconds: saved.elapsedSeconds || 0,
+      };
+      if (dom.quizModeTag) {
+        dom.quizModeTag.textContent = state.currentQuiz.mode === 'exam' ? '⏱️ 正式測驗' : '📖 練習模式';
+      }
+      if (dom.totalQNum) {
+        dom.totalQNum.textContent = state.currentQuiz.questions.length;
+      }
+      startQuizTimer(state.currentQuiz.elapsedSeconds);
+      renderCurrentQuestion();
+      renderPaletteButtons();
+      switchView('quiz');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function ensureRawQuestionsLoaded() {
+    if (state.rawQuestionsPool && state.rawQuestionsPool.length > 0) {
+      return state.rawQuestionsPool;
+    }
+    let dataUrl = './data/questions.json';
+    if (window.location && window.location.pathname && window.location.pathname.includes('/static/')) {
+      dataUrl = '../data/questions.json';
+    }
+    try {
+      const resp = await fetch(dataUrl);
+      if (resp && resp.ok) {
+        const data = await resp.json();
+        if (data && Array.isArray(data.questions)) {
+          state.rawQuestionsPool = data.questions;
+        }
+      }
+    } catch (e) {
+      console.warn('[Storage] Could not pre-load questions.json:', e);
+    }
+    return state.rawQuestionsPool;
+  }
 
   // =========================================================================
   // Helper Utilities
@@ -286,6 +453,7 @@
           updateRuntimeBadge('api');
           console.log('[Dual-Runtime] FastAPI Backend connected successfully (API Mode)');
           renderChapterCards();
+          tryRestoreActiveQuizFromStorage();
           return;
         }
       }
@@ -318,6 +486,7 @@
       state.rawQuestionsPool = data.questions || [];
       console.log(`[Dual-Runtime] Loaded ${state.rawQuestionsPool.length} questions across ${state.allChapters.length} chapters.`);
       renderChapterCards();
+      tryRestoreActiveQuizFromStorage();
     } catch (err) {
       console.error('[Dual-Runtime] Failed to load static question bank:', err);
       if (dom.chapterList) {
@@ -453,6 +622,15 @@
           </div>
           <div class="chapter-title-zh">${escapeHtml(ch.title_zh)}</div>
           <div class="chapter-title-en">${escapeHtml(ch.title_en)}</div>
+          <div class="chapter-progress-row" data-ch-progress="${ch.id}">
+            <div class="chapter-progress-meta">
+              <span>已刷 0 / ${ch.total_questions} 題</span>
+              <span>0%</span>
+            </div>
+            <div class="chapter-mini-track">
+              <div class="chapter-mini-fill" style="width: 0%;"></div>
+            </div>
+          </div>
         </div>
       `;
 
@@ -471,14 +649,40 @@
       dom.chapterList.appendChild(card);
     });
 
+    renderProgressDashboard();
+    updateChapterCardProgress();
     onChapterSelectionChanged();
   }
 
-  /** Computes the total selectable question pool count based on selected chapters. */
+  /** Computes the total selectable question pool count based on selected chapters and poolFilter. */
   function getSelectedPoolSize() {
-    return state.allChapters
-      .filter(c => state.selectedChapterIds.has(c.id))
-      .reduce((sum, c) => sum + c.total_questions, 0);
+    const selectedChs = state.allChapters.filter(c => state.selectedChapterIds.has(c.id));
+    if (selectedChs.length === 0) return 0;
+
+    if (state.poolFilter === 'all') {
+      return selectedChs.reduce((sum, c) => sum + c.total_questions, 0);
+    }
+
+    const progress = loadProgressData();
+    if (state.poolFilter === 'wrong') {
+      return Object.values(progress.wrongBook).filter(item => state.selectedChapterIds.has(item.chapterId)).length;
+    }
+
+    if (state.poolFilter === 'unseen') {
+      if (state.rawQuestionsPool && state.rawQuestionsPool.length > 0) {
+        return state.rawQuestionsPool.filter(
+          q => state.selectedChapterIds.has(q.chapter_id) && !progress.attemptedIds[q.id]
+        ).length;
+      }
+      // Estimate from chapter totals minus attempted in those chapters
+      const totalInSelected = selectedChs.reduce((sum, c) => sum + c.total_questions, 0);
+      const attemptedInSelected = Object.values(progress.attemptedIds).filter(
+        a => state.selectedChapterIds.has(a.chapterId)
+      ).length;
+      return Math.max(0, totalInSelected - attemptedInSelected);
+    }
+
+    return selectedChs.reduce((sum, c) => sum + c.total_questions, 0);
   }
 
   /** Triggered when chapter selection changes to adjust pool count and clamp slider bounds. */
@@ -585,7 +789,7 @@
     try {
       let sessionData = null;
 
-      if (state.runtimeMode === 'api') {
+      if (state.runtimeMode === 'api' && state.poolFilter === 'all') {
         const resp = await fetch('/api/quiz/new', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -601,10 +805,23 @@
         }
         sessionData = await resp.json();
       } else {
-        // Static mode
-        const sampled = clientSampleQuestions(state.rawQuestionsPool, chapterIds, count);
+        // Static mode or filtered pool mode ('unseen' / 'wrong')
+        await ensureRawQuestionsLoaded();
+        let candidatePool = state.rawQuestionsPool;
+        const progress = loadProgressData();
+
+        if (state.poolFilter === 'unseen') {
+          candidatePool = candidatePool.filter(q => !progress.attemptedIds[q.id]);
+        } else if (state.poolFilter === 'wrong') {
+          candidatePool = candidatePool.filter(q => Boolean(progress.wrongBook[q.id]));
+        }
+
+        const sampled = clientSampleQuestions(candidatePool, chapterIds, count);
         if (sampled.length === 0) {
-          throw new Error('選取的章節中無可用試題！');
+          const reason = state.poolFilter === 'unseen'
+            ? '所選章節目前已無「未做過的新題」（恭喜已全部刷完！）'
+            : (state.poolFilter === 'wrong' ? '所選章節目前沒有「歷史錯題」紀錄！' : '選取的章節中無可用試題！');
+          throw new Error(reason);
         }
         sessionData = {
           session_id: 'static-session-' + Date.now(),
@@ -653,25 +870,29 @@
     }
 
     // Start Timer
-    startQuizTimer();
+    startQuizTimer(0);
 
     // Render Question & Palette
     renderCurrentQuestion();
     renderPaletteButtons();
+    saveActiveQuizToStorage();
   }
 
   /** Starts the quiz timer. */
-  function startQuizTimer() {
+  function startQuizTimer(initialSeconds = 0) {
     if (state.currentQuiz.timerInterval) {
       clearInterval(state.currentQuiz.timerInterval);
     }
-    state.currentQuiz.elapsedSeconds = 0;
-    if (dom.quizTimer) dom.quizTimer.textContent = '00:00';
+    state.currentQuiz.elapsedSeconds = initialSeconds || 0;
+    if (dom.quizTimer) dom.quizTimer.textContent = formatTime(state.currentQuiz.elapsedSeconds);
 
     state.currentQuiz.timerInterval = setInterval(() => {
       state.currentQuiz.elapsedSeconds++;
       if (dom.quizTimer) {
         dom.quizTimer.textContent = formatTime(state.currentQuiz.elapsedSeconds);
+      }
+      if (state.currentQuiz.elapsedSeconds % 5 === 0) {
+        saveActiveQuizToStorage();
       }
     }, 1000);
   }
@@ -824,6 +1045,7 @@
 
     // Update Palette badge
     updatePaletteStatus();
+    saveActiveQuizToStorage();
   }
 
   /** Toggles flag on current question. */
@@ -847,6 +1069,7 @@
     }
 
     updatePaletteStatus();
+    saveActiveQuizToStorage();
   }
 
   /** Navigates to a specific question index. */
@@ -854,6 +1077,7 @@
     if (index < 0 || index >= state.currentQuiz.questions.length) return;
     state.currentQuiz.currentIndex = index;
     renderCurrentQuestion();
+    saveActiveQuizToStorage();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -1021,8 +1245,12 @@
 
     try {
       let result = null;
+      const isCustomSession = String(sessionId || '').startsWith('static-') ||
+                              String(sessionId || '').startsWith('retry-') ||
+                              String(sessionId || '').startsWith('wrong-book-') ||
+                              String(sessionId || '').startsWith('restored-');
 
-      if (state.runtimeMode === 'api') {
+      if (state.runtimeMode === 'api' && !isCustomSession) {
         const resp = await fetch('/api/quiz/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1032,15 +1260,29 @@
           }),
         });
 
-        if (!resp.ok) {
-          throw new Error(`交卷評分失敗 (HTTP ${resp.status})`);
+        if (resp.ok) {
+          result = await resp.json();
+        } else {
+          // Fallback to client-side evaluation if server restarted after F5
+          await ensureRawQuestionsLoaded();
+          const poolMap = new Map((state.rawQuestionsPool || []).map(q => [q.id, q]));
+          const enriched = questions.map(q => poolMap.get(q.id) || q);
+          result = clientEvaluateSubmission(enriched, answers);
         }
-        result = await resp.json();
       } else {
-        // Client-side evaluation
-        result = clientEvaluateSubmission(questions, answers);
+        // Client-side evaluation (enrich from rawQuestionsPool if answers/explanations were omitted)
+        const needsEnrich = questions.some(q => !q.correct_answer);
+        let evalQuestions = questions;
+        if (needsEnrich) {
+          await ensureRawQuestionsLoaded();
+          const poolMap = new Map((state.rawQuestionsPool || []).map(q => [q.id, q]));
+          evalQuestions = questions.map(q => poolMap.get(q.id) || q);
+        }
+        result = clientEvaluateSubmission(evalQuestions, answers);
       }
 
+      clearActiveQuizFromStorage();
+      recordSubmissionProgress(questions, answers, result);
       state.submissionResult = result;
       renderReviewView();
       switchView('review');
@@ -1343,6 +1585,347 @@
   window.appOpenDiagram = (src) => openDiagramModal(src, '經濟學試題圖表');
 
   // =========================================================================
+  // PROGRESS DASHBOARD, HISTORICAL WRONG BOOK & SCORE HISTORY MODALS
+  // =========================================================================
+
+  /** Records submitted quiz results into persistent localStorage. */
+  function recordSubmissionProgress(questions, userAnswers, evalResult) {
+    if (!evalResult || !Array.isArray(evalResult.results)) return;
+    const progress = loadProgressData();
+    const qMap = new Map((questions || []).map(q => [q.id, q]));
+    const now = Date.now();
+
+    evalResult.results.forEach(r => {
+      const qId = r.question_id;
+      const origQ = qMap.get(qId) || {};
+      const chId = origQ.chapter_id || (qId.includes('_') ? qId.split('_')[0].replace('Ch0', 'Ch_0') : 'Ch_01');
+
+      const prevAttempt = progress.attemptedIds[qId] || { attempts: 0, correct: 0 };
+      progress.attemptedIds[qId] = {
+        chapterId: chId,
+        attempts: (prevAttempt.attempts || 0) + 1,
+        correct: (prevAttempt.correct || 0) + (r.is_correct ? 1 : 0),
+        lastCorrect: Boolean(r.is_correct),
+        lastTime: now,
+      };
+
+      if (!r.is_correct) {
+        const prevWrong = progress.wrongBook[qId] || { wrongCount: 0 };
+        progress.wrongBook[qId] = {
+          questionId: qId,
+          chapterId: chId,
+          wrongCount: (prevWrong.wrongCount || 0) + 1,
+          lastUserAnswer: r.user_answer || null,
+          correctAnswer: r.correct_answer || '',
+          updatedAt: now,
+        };
+      }
+    });
+
+    const chaptersInQuiz = Array.from(new Set((questions || []).map(q => q.chapter_id).filter(Boolean))).sort();
+    const dt = new Date(now);
+    const dateStr = `${dt.getFullYear()}/${String(dt.getMonth() + 1).padStart(2, '0')}/${String(dt.getDate()).padStart(2, '0')} ${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+
+    progress.scoreHistory.unshift({
+      id: 'hist-' + now,
+      timestamp: now,
+      dateStr: dateStr,
+      mode: state.currentQuiz.mode || 'practice',
+      chapters: chaptersInQuiz,
+      total: evalResult.total_questions,
+      correct: evalResult.correct_count,
+      percentage: evalResult.score_percentage,
+      elapsedSeconds: state.currentQuiz.elapsedSeconds || 0,
+    });
+
+    if (progress.scoreHistory.length > 200) {
+      progress.scoreHistory = progress.scoreHistory.slice(0, 200);
+    }
+
+    saveProgressData(progress);
+    renderProgressDashboard();
+    updateChapterCardProgress();
+    onChapterSelectionChanged();
+  }
+
+  /** Updates the learning progress dashboard metrics in Setup View. */
+  function renderProgressDashboard() {
+    const progress = loadProgressData();
+    const totalBank = state.allChapters.reduce((s, c) => s + (c.total_questions || 0), 0) || 585;
+    const attemptedCount = Object.keys(progress.attemptedIds).length;
+    const pct = totalBank > 0 ? Math.min(100, (attemptedCount / totalBank) * 100) : 0;
+
+    const wrongCount = Object.keys(progress.wrongBook).length;
+    const historyList = progress.scoreHistory || [];
+    const sessionCount = historyList.length;
+
+    let avgText = '--%';
+    if (sessionCount > 0) {
+      const avg = historyList.reduce((s, h) => s + (Number(h.percentage) || 0), 0) / sessionCount;
+      avgText = `${avg.toFixed(1)}%`;
+    }
+
+    if (dom.statAttemptedCount) dom.statAttemptedCount.textContent = attemptedCount;
+    if (dom.statBankTotal) dom.statBankTotal.textContent = totalBank;
+    if (dom.statCompletionPct) dom.statCompletionPct.textContent = `${pct.toFixed(1)}%`;
+    if (dom.bankCompletionBar) dom.bankCompletionBar.style.width = `${pct}%`;
+
+    if (dom.statWrongBookCount) dom.statWrongBookCount.textContent = wrongCount;
+    if (dom.statHistoryCount) dom.statHistoryCount.textContent = sessionCount;
+    if (dom.statTotalSessions) dom.statTotalSessions.textContent = `${sessionCount} 次`;
+    if (dom.statAvgScore) dom.statAvgScore.textContent = avgText;
+    if (dom.statWrongCountPill) dom.statWrongCountPill.textContent = `${wrongCount} 題`;
+  }
+
+  /** Updates per-chapter mini completion bars on chapter cards. */
+  function updateChapterCardProgress() {
+    if (!dom.chapterList) return;
+    const progress = loadProgressData();
+    const byChapter = {};
+    Object.values(progress.attemptedIds).forEach(item => {
+      if (item && item.chapterId) {
+        byChapter[item.chapterId] = (byChapter[item.chapterId] || 0) + 1;
+      }
+    });
+
+    state.allChapters.forEach(ch => {
+      const row = dom.chapterList.querySelector(`[data-ch-progress="${ch.id}"]`);
+      if (!row) return;
+      const done = Math.min(ch.total_questions, byChapter[ch.id] || 0);
+      const pct = ch.total_questions > 0 ? Math.round((done / ch.total_questions) * 100) : 0;
+      row.innerHTML = `
+        <div class="chapter-progress-meta">
+          <span>已刷 ${done} / ${ch.total_questions} 題</span>
+          <span>${pct}%</span>
+        </div>
+        <div class="chapter-mini-track">
+          <div class="chapter-mini-fill" style="width: ${pct}%;"></div>
+        </div>
+      `;
+    });
+  }
+
+  /** Opens the Historical Wrong Question Book modal. */
+  async function openWrongBookModal() {
+    if (!dom.wrongBookModal) return;
+    dom.wrongBookModal.classList.add('open');
+    dom.wrongBookModal.setAttribute('aria-hidden', 'false');
+    if (dom.wrongBookList) {
+      dom.wrongBookList.innerHTML = '<div class="loading-state"><span class="spinner"></span> 載入錯題詳解中...</div>';
+    }
+    await ensureRawQuestionsLoaded();
+    renderWrongBookList();
+  }
+
+  function closeWrongBookModal() {
+    if (!dom.wrongBookModal) return;
+    dom.wrongBookModal.classList.remove('open');
+    dom.wrongBookModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function renderWrongBookList() {
+    if (!dom.wrongBookList) return;
+    const progress = loadProgressData();
+    const wrongItems = Object.values(progress.wrongBook).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    if (dom.btnPracticeWrongBook) {
+      dom.btnPracticeWrongBook.disabled = wrongItems.length === 0;
+    }
+
+    if (wrongItems.length === 0) {
+      dom.wrongBookList.innerHTML = '<div class="loading-state">🎉 目前錯題本是空的！繼續保持！</div>';
+      return;
+    }
+
+    const poolMap = new Map((state.rawQuestionsPool || []).map(q => [q.id, q]));
+    dom.wrongBookList.innerHTML = '';
+
+    wrongItems.forEach((item, idx) => {
+      const q = poolMap.get(item.questionId) || {};
+      const stem = q.stem || item.questionId;
+      const correctAns = (q.correct_answer || item.correctAnswer || '').toLowerCase();
+      const userAns = (item.lastUserAnswer || '').toLowerCase();
+
+      let optionsHtml = '<div class="review-options-grid">';
+      ['a', 'b', 'c', 'd'].forEach(optKey => {
+        const optText = (q.options && q.options[optKey]) ? q.options[optKey] : '';
+        if (!optText) return;
+        let rowClass = 'review-option-row';
+        let ind = '';
+        if (optKey === correctAns) {
+          rowClass += ' answer-correct';
+          ind = '<span class="opt-indicator opt-indicator-correct">正解 ✔️</span>';
+        } else if (optKey === userAns) {
+          rowClass += ' user-wrong';
+          ind = '<span class="opt-indicator opt-indicator-user">上次誤選 ❌</span>';
+        }
+        optionsHtml += `
+          <div class="${rowClass}">
+            <strong>${optKey.toUpperCase()}.</strong>
+            <div style="flex:1;">${formatOptionHtml(optText)}</div>
+            ${ind}
+          </div>
+        `;
+      });
+      optionsHtml += '</div>';
+
+      let explHtml = '';
+      if (q.explanation_zh) {
+        const exp = q.explanation_zh;
+        let distHtml = '';
+        if (exp.distractors && Object.keys(exp.distractors).length > 0) {
+          distHtml = '<div class="diagnostic-box diagnostic-distractors"><div class="diagnostic-header">⚠️ 【干擾項辨析】</div><div class="diagnostic-body">';
+          Object.keys(exp.distractors).sort().forEach(k => {
+            distHtml += `<div class="distractor-item"><strong>選項 ${k.toUpperCase()}：</strong>${escapeHtml(exp.distractors[k])}</div>`;
+          });
+          distHtml += '</div></div>';
+        }
+        explHtml = `
+          <div class="diagnostic-explanation-container">
+            ${exp.concept ? `<div class="diagnostic-box diagnostic-concept"><div class="diagnostic-header">💡 【考點核心】</div><div class="diagnostic-body">${escapeHtml(exp.concept)}</div></div>` : ''}
+            ${exp.rationale ? `<div class="diagnostic-box diagnostic-rationale"><div class="diagnostic-header">📖 【正解詳析】</div><div class="diagnostic-body">${escapeHtml(exp.rationale)}</div></div>` : ''}
+            ${distHtml}
+          </div>
+        `;
+      }
+
+      const card = document.createElement('div');
+      card.className = 'card review-q-card is-wrong-card';
+      card.innerHTML = `
+        <div class="review-card-header">
+          <div>
+            <strong>#${idx + 1}</strong>
+            <span class="tag tag-chapter" style="margin-left: 0.4rem;">${escapeHtml(item.questionId)}</span>
+            <span class="review-status-badge status-badge-wrong" style="margin-left: 0.4rem;">累計答錯 ${item.wrongCount || 1} 次</span>
+          </div>
+          <button type="button" class="btn-mastered" data-remove-qid="${escapeHtml(item.questionId)}">
+            ✔️ 已學會（移出錯題本）
+          </button>
+        </div>
+        <div class="review-stem">${escapeHtml(stem)}</div>
+        ${optionsHtml}
+        ${explHtml}
+      `;
+
+      const removeBtn = card.querySelector('.btn-mastered');
+      removeBtn?.addEventListener('click', () => {
+        removeWrongBookItem(item.questionId);
+      });
+
+      dom.wrongBookList.appendChild(card);
+    });
+  }
+
+  function removeWrongBookItem(qId) {
+    const progress = loadProgressData();
+    delete progress.wrongBook[qId];
+    saveProgressData(progress);
+    renderProgressDashboard();
+    onChapterSelectionChanged();
+    renderWrongBookList();
+  }
+
+  function clearWrongBook() {
+    if (!confirm('確定要清空所有歷史錯題紀錄嗎？')) return;
+    const progress = loadProgressData();
+    progress.wrongBook = {};
+    saveProgressData(progress);
+    renderProgressDashboard();
+    onChapterSelectionChanged();
+    renderWrongBookList();
+  }
+
+  async function practiceWrongBookOnly() {
+    await ensureRawQuestionsLoaded();
+    const progress = loadProgressData();
+    const wrongIds = new Set(Object.keys(progress.wrongBook));
+    if (wrongIds.size === 0) {
+      alert('目前沒有歷史錯題可供練習！');
+      return;
+    }
+    const wrongQuestions = (state.rawQuestionsPool || []).filter(q => wrongIds.has(q.id));
+    if (wrongQuestions.length === 0) {
+      alert('無法載入錯題題庫！');
+      return;
+    }
+    closeWrongBookModal();
+    const sampled = clientSampleQuestions(
+      wrongQuestions,
+      Array.from(new Set(wrongQuestions.map(q => q.chapter_id))),
+      Math.min(state.requestedCount || 20, wrongQuestions.length)
+    );
+    const newSession = {
+      session_id: 'wrong-book-session-' + Date.now(),
+      mode: 'practice',
+      total_questions: sampled.length,
+      questions: sampled,
+    };
+    initializeQuizSession(newSession);
+    switchView('quiz');
+  }
+
+  /** Opens the Score History modal. */
+  function openScoreHistoryModal() {
+    if (!dom.scoreHistoryModal) return;
+    renderScoreHistoryList();
+    dom.scoreHistoryModal.classList.add('open');
+    dom.scoreHistoryModal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeScoreHistoryModal() {
+    if (!dom.scoreHistoryModal) return;
+    dom.scoreHistoryModal.classList.remove('open');
+    dom.scoreHistoryModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function renderScoreHistoryList() {
+    if (!dom.scoreHistoryList) return;
+    const progress = loadProgressData();
+    const list = progress.scoreHistory || [];
+
+    if (list.length === 0) {
+      dom.scoreHistoryList.innerHTML = '<div class="loading-state">📭 尚無歷史測驗成績紀錄，完成一次測驗後將自動記錄！</div>';
+      return;
+    }
+
+    dom.scoreHistoryList.innerHTML = '';
+    list.forEach((rec, i) => {
+      const chText = Array.isArray(rec.chapters) && rec.chapters.length > 0
+        ? rec.chapters.map(c => c.replace('Ch_0', 'Ch')).join(', ')
+        : '全範圍';
+      const modeText = rec.mode === 'exam' ? '⏱️ 正式測驗' : '📖 練習模式';
+      const pct = Number(rec.percentage || 0).toFixed(1);
+      const badgeClass = rec.percentage >= 80 ? 'status-badge-correct' : 'status-badge-wrong';
+
+      const item = document.createElement('div');
+      item.className = 'history-record-card';
+      item.innerHTML = `
+        <div class="history-record-main">
+          <div class="history-record-date">#${list.length - i} · ${escapeHtml(rec.dateStr || '')} · ${modeText} · 耗時 ${formatTime(rec.elapsedSeconds || 0)}</div>
+          <div class="history-record-chapters">範圍：${escapeHtml(chText)}</div>
+        </div>
+        <div class="history-record-score">
+          <strong>${rec.correct} / ${rec.total} 題</strong>
+          <span class="review-status-badge ${badgeClass}">${pct}%</span>
+        </div>
+      `;
+      dom.scoreHistoryList.appendChild(item);
+    });
+  }
+
+  function resetAllProgress() {
+    if (!confirm('確定要清除所有歷史成績與題庫刷題進度嗎？此操作無法復原。')) return;
+    const progress = loadProgressData();
+    progress.attemptedIds = {};
+    progress.scoreHistory = [];
+    saveProgressData(progress);
+    renderProgressDashboard();
+    updateChapterCardProgress();
+    onChapterSelectionChanged();
+    renderScoreHistoryList();
+  }
+
+  // =========================================================================
   // VIEW SWITCHING STATE MACHINE
   // =========================================================================
 
@@ -1385,6 +1968,8 @@
       closePaletteDrawer();
       closeGuardrailModal();
       closeDiagramModal();
+      closeWrongBookModal();
+      closeScoreHistoryModal();
       return;
     }
 
@@ -1419,13 +2004,39 @@
     // Header Navigation
     dom.btnNavHome?.addEventListener('click', () => {
       if (dom.viewQuiz?.classList.contains('active')) {
-        if (confirm('測驗正在進行中，返回設定將遺失本次作答進度。確定要返回嗎？')) {
+        if (confirm('測驗正在進行中，返回設定將放棄本次作答進度。確定要返回嗎？')) {
           stopQuizTimer();
+          clearActiveQuizFromStorage();
           switchView('setup');
         }
       } else {
         switchView('setup');
       }
+    });
+
+    // Progress Dashboard & Modals
+    dom.btnOpenWrongBook?.addEventListener('click', openWrongBookModal);
+    dom.btnCloseWrongBook?.addEventListener('click', closeWrongBookModal);
+    dom.wrongBookBackdrop?.addEventListener('click', closeWrongBookModal);
+    dom.btnPracticeWrongBook?.addEventListener('click', practiceWrongBookOnly);
+    dom.btnClearWrongBook?.addEventListener('click', clearWrongBook);
+
+    dom.btnOpenScoreHistory?.addEventListener('click', openScoreHistoryModal);
+    dom.btnCloseScoreHistory?.addEventListener('click', closeScoreHistoryModal);
+    dom.scoreHistoryBackdrop?.addEventListener('click', closeScoreHistoryModal);
+    dom.btnResetAllProgress?.addEventListener('click', resetAllProgress);
+
+    // Pool Filter Chips (All / Unseen / Historical Wrong)
+    dom.poolFilterChips?.forEach(chip => {
+      chip.addEventListener('click', async () => {
+        const filterVal = chip.dataset.poolFilter || 'all';
+        state.poolFilter = filterVal;
+        dom.poolFilterChips.forEach(c => c.classList.toggle('active', c.dataset.poolFilter === filterVal));
+        if (filterVal !== 'all') {
+          await ensureRawQuestionsLoaded();
+        }
+        onChapterSelectionChanged();
+      });
     });
 
     // Quick Chapter Selectors
