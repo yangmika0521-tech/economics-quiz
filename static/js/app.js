@@ -19,6 +19,7 @@
     runtimeMode: 'detecting', // 'api' | 'static'
     allChapters: [],          // Chapter metadata list
     rawQuestionsPool: [],     // All questions (used in static mode)
+    translationsMap: null,    // questionId -> { stem_zh, context_table_zh, options_zh }
     selectedChapterIds: new Set(),
     requestedCount: 20,
     selectedMode: 'practice', // 'practice' | 'exam'
@@ -31,6 +32,7 @@
       questions: [],
       userAnswers: {},       // questionId -> 'a' | 'b' | 'c' | 'd'
       flaggedQuestionIds: new Set(),
+      isTranslated: false,   // Practice-mode one-click Chinese translation state
       currentIndex: 0,
       startTime: null,
       timerInterval: null,
@@ -77,15 +79,20 @@
     currentQNum: document.getElementById('current-q-num'),
     totalQNum: document.getElementById('total-q-num'),
     quizTimer: document.getElementById('quiz-timer'),
+    btnTranslateQ: document.getElementById('btn-translate-q'),
+    translateText: document.getElementById('translate-text'),
     btnFlagQ: document.getElementById('btn-flag-q'),
     flagText: document.getElementById('flag-text'),
     btnTogglePalette: document.getElementById('btn-toggle-palette'),
     paletteSummaryCount: document.getElementById('palette-summary-count'),
     quizProgressBar: document.getElementById('quiz-progress-bar'),
+    shortcutTranslateDivider: document.getElementById('shortcut-translate-divider'),
+    shortcutTranslateHint: document.getElementById('shortcut-translate-hint'),
 
     // Question Card
     stemQNumber: document.getElementById('stem-q-number'),
     questionStem: document.getElementById('question-stem'),
+    questionStemZh: document.getElementById('question-stem-zh'),
     questionContextTable: document.getElementById('question-context-table'),
     questionDiagramContainer: document.getElementById('question-diagram-container'),
     questionDiagramImg: document.getElementById('question-diagram-img'),
@@ -223,6 +230,7 @@
         questions: state.currentQuiz.questions,
         userAnswers: state.currentQuiz.userAnswers,
         flaggedQuestionIds: Array.from(state.currentQuiz.flaggedQuestionIds || []),
+        isTranslated: state.currentQuiz.mode === 'exam' ? false : Boolean(state.currentQuiz.isTranslated),
         currentIndex: state.currentQuiz.currentIndex || 0,
         elapsedSeconds: state.currentQuiz.elapsedSeconds || 0,
         savedAt: Date.now(),
@@ -253,12 +261,14 @@
       if (!saved || !Array.isArray(saved.questions) || saved.questions.length === 0) {
         return false;
       }
+      const restoredMode = saved.mode || 'practice';
       state.currentQuiz = {
         sessionId: saved.sessionId || ('restored-session-' + Date.now()),
-        mode: saved.mode || 'practice',
+        mode: restoredMode,
         questions: saved.questions,
         userAnswers: saved.userAnswers || {},
         flaggedQuestionIds: new Set(Array.isArray(saved.flaggedQuestionIds) ? saved.flaggedQuestionIds : []),
+        isTranslated: restoredMode === 'exam' ? false : Boolean(saved.isTranslated),
         currentIndex: Math.min(Math.max(0, saved.currentIndex || 0), saved.questions.length - 1),
         startTime: Date.now(),
         timerInterval: null,
@@ -269,6 +279,13 @@
       }
       if (dom.totalQNum) {
         dom.totalQNum.textContent = state.currentQuiz.questions.length;
+      }
+      if (restoredMode !== 'exam') {
+        ensureTranslationsLoaded().then(() => {
+          if (state.currentQuiz.isTranslated) {
+            renderCurrentQuestion();
+          }
+        });
       }
       startQuizTimer(state.currentQuiz.elapsedSeconds);
       renderCurrentQuestion();
@@ -300,6 +317,40 @@
       console.warn('[Storage] Could not pre-load questions.json:', e);
     }
     return state.rawQuestionsPool;
+  }
+
+  async function ensureTranslationsLoaded() {
+    if (state.translationsMap && Object.keys(state.translationsMap).length > 0) {
+      return state.translationsMap;
+    }
+    let transUrl = './data/translations_zh.json';
+    if (window.location && window.location.pathname && window.location.pathname.includes('/static/')) {
+      transUrl = '../data/translations_zh.json';
+    }
+    try {
+      const resp = await fetch(transUrl);
+      if (resp && resp.ok) {
+        const data = await resp.json();
+        if (data && data.translations && typeof data.translations === 'object') {
+          state.translationsMap = data.translations;
+        }
+      }
+    } catch (e) {
+      console.warn('[Translation] Could not load translations_zh.json:', e);
+    }
+    return state.translationsMap || {};
+  }
+
+  function getQuestionTranslation(q) {
+    if (!q) return null;
+    if (state.translationsMap && state.translationsMap[q.id]) {
+      return state.translationsMap[q.id];
+    }
+    return {
+      stem_zh: q.stem_zh || q.stem || '',
+      context_table_zh: q.context_table_zh || q.context_table || null,
+      options_zh: q.options_zh || q.options || {},
+    };
   }
 
   // =========================================================================
@@ -849,17 +900,24 @@
 
   /** Sets up the active quiz session and starts timer. */
   function initializeQuizSession(sessionData) {
+    const activeMode = sessionData.mode || state.selectedMode;
     state.currentQuiz = {
       sessionId: sessionData.session_id,
-      mode: sessionData.mode || state.selectedMode,
+      mode: activeMode,
       questions: sessionData.questions,
       userAnswers: {},
       flaggedQuestionIds: new Set(),
+      isTranslated: false,
       currentIndex: 0,
       startTime: Date.now(),
       timerInterval: null,
       elapsedSeconds: 0,
     };
+
+    // Pre-fetch translations in background if in practice mode
+    if (activeMode !== 'exam') {
+      ensureTranslationsLoaded();
+    }
 
     // Update Header Tag & Totals
     if (dom.quizModeTag) {
@@ -912,6 +970,13 @@
     const q = qList[qIndex];
     if (!q) return;
 
+    const isPractice = (state.currentQuiz.mode !== 'exam');
+    if (!isPractice) {
+      state.currentQuiz.isTranslated = false;
+    }
+    const showTranslation = isPractice && Boolean(state.currentQuiz.isTranslated);
+    const transEntry = showTranslation ? getQuestionTranslation(q) : null;
+
     // Update progress numbers
     if (dom.currentQNum) dom.currentQNum.textContent = qIndex + 1;
     if (dom.stemQNumber) dom.stemQNumber.textContent = qIndex + 1;
@@ -926,6 +991,26 @@
       dom.quizProgressBar.style.width = `${pct}%`;
     }
 
+    // Update Translate button visibility & state (strictly Practice mode only)
+    if (dom.btnTranslateQ) {
+      if (isPractice) {
+        dom.btnTranslateQ.classList.remove('hidden');
+        dom.btnTranslateQ.classList.toggle('active', showTranslation);
+        if (dom.translateText) {
+          dom.translateText.textContent = showTranslation ? '隱藏翻譯' : '中文翻譯';
+        }
+      } else {
+        dom.btnTranslateQ.classList.add('hidden');
+        dom.btnTranslateQ.classList.remove('active');
+      }
+    }
+    if (dom.shortcutTranslateDivider) {
+      dom.shortcutTranslateDivider.classList.toggle('hidden', !isPractice);
+    }
+    if (dom.shortcutTranslateHint) {
+      dom.shortcutTranslateHint.classList.toggle('hidden', !isPractice);
+    }
+
     // Update Flag button state
     const isFlagged = state.currentQuiz.flaggedQuestionIds.has(q.id);
     if (dom.btnFlagQ) {
@@ -935,15 +1020,27 @@
       }
     }
 
-    // Render Stem
+    // Render Stem (and Chinese Stem Translation in Practice Mode when active)
     if (dom.questionStem) {
       dom.questionStem.textContent = q.stem;
+    }
+    if (dom.questionStemZh) {
+      if (showTranslation && transEntry && transEntry.stem_zh) {
+        dom.questionStemZh.textContent = `🌐 ${transEntry.stem_zh}`;
+        dom.questionStemZh.classList.remove('hidden');
+      } else {
+        dom.questionStemZh.textContent = '';
+        dom.questionStemZh.classList.add('hidden');
+      }
     }
 
     // Render Context Table
     if (dom.questionContextTable) {
       if (q.context_table) {
-        dom.questionContextTable.innerHTML = renderMarkdownTable(q.context_table);
+        const tableToRender = (showTranslation && transEntry && transEntry.context_table_zh)
+          ? transEntry.context_table_zh
+          : q.context_table;
+        dom.questionContextTable.innerHTML = renderMarkdownTable(tableToRender);
         dom.questionContextTable.classList.remove('hidden');
       } else {
         dom.questionContextTable.innerHTML = '';
@@ -971,7 +1068,7 @@
     }
 
     // Render Options A, B, C, D
-    renderQuestionOptions(q);
+    renderQuestionOptions(q, showTranslation ? transEntry : null);
 
     // Update Nav Buttons
     if (dom.btnPrevQ) {
@@ -988,8 +1085,8 @@
     updatePaletteStatus();
   }
 
-  /** Renders options for the active question. */
-  function renderQuestionOptions(q) {
+  /** Renders options for the active question (with optional Chinese translation in Practice Mode). */
+  function renderQuestionOptions(q, transEntry = null) {
     if (!dom.questionOptions) return;
     dom.questionOptions.innerHTML = '';
 
@@ -1007,10 +1104,18 @@
         item.classList.add('selected');
       }
 
+      let zhOptionHtml = '';
+      if (transEntry && transEntry.options_zh && transEntry.options_zh[key]) {
+        const optZh = transEntry.options_zh[key];
+        if (!optZh.includes('<img')) {
+          zhOptionHtml = `<div class="option-text-zh">🌐 ${escapeHtml(optZh)}</div>`;
+        }
+      }
+
       item.innerHTML = `
         <input type="radio" name="active-q-option" value="${key}" class="option-radio" ${currentAnswer === key ? 'checked' : ''}>
         <span class="option-key-badge">${key.toUpperCase()}</span>
-        <div class="option-content">${formatOptionHtml(optText)}</div>
+        <div class="option-content">${formatOptionHtml(optText)}${zhOptionHtml}</div>
       `;
 
       item.addEventListener('click', (e) => {
@@ -1045,6 +1150,22 @@
 
     // Update Palette badge
     updatePaletteStatus();
+    saveActiveQuizToStorage();
+  }
+
+  /** Toggles one-click Chinese translation (Practice Mode ONLY; strictly disabled in Exam Mode). */
+  async function toggleTranslateCurrentQuestion() {
+    if (!state.currentQuiz || state.currentQuiz.mode === 'exam') {
+      if (state.currentQuiz) state.currentQuiz.isTranslated = false;
+      return;
+    }
+
+    state.currentQuiz.isTranslated = !state.currentQuiz.isTranslated;
+    if (state.currentQuiz.isTranslated && !state.translationsMap) {
+      await ensureTranslationsLoaded();
+    }
+
+    renderCurrentQuestion();
     saveActiveQuizToStorage();
   }
 
@@ -1993,6 +2114,8 @@
       nextQuestion();
     } else if (key === 'f') {
       toggleFlagCurrentQuestion();
+    } else if (key === 't') {
+      toggleTranslateCurrentQuestion();
     }
   }
 
@@ -2070,6 +2193,7 @@
     dom.btnPrevQ?.addEventListener('click', prevQuestion);
     dom.btnNextQ?.addEventListener('click', nextQuestion);
     dom.btnSubmitQuiz?.addEventListener('click', checkAndSubmitQuiz);
+    dom.btnTranslateQ?.addEventListener('click', toggleTranslateCurrentQuestion);
     dom.btnFlagQ?.addEventListener('click', toggleFlagCurrentQuestion);
 
     // Drawer Controls

@@ -280,6 +280,20 @@ class TestFastApiStaticDelivery:
         assert "questions" in data
         assert len(data["questions"]) == 585
 
+    def test_data_translations_zh_json_contract_and_anti_leakage(self):
+        """GET /data/translations_zh.json must return 585 translations and strictly omit answers/explanations."""
+        resp = client.get("/data/translations_zh.json")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "translations" in data
+        translations = data["translations"]
+        assert len(translations) == 585
+        for qid, entry in translations.items():
+            assert "stem_zh" in entry and entry["stem_zh"]
+            assert "options_zh" in entry and set(entry["options_zh"].keys()) == {"a", "b", "c", "d"}
+            assert "correct_answer" not in entry, f"Leakage: correct_answer found in translation for {qid}"
+            assert "explanation_zh" not in entry, f"Leakage: explanation_zh found in translation for {qid}"
+
 
 # ==============================================================================
 # 5. Deployment Guide Documentation Contract

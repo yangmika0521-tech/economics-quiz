@@ -189,7 +189,7 @@
                     <span class="mode-icon">📖</span>
                     <strong class="mode-title">練習模式 (Practice)</strong>
                   </div>
-                  <p class="mode-desc">自主練習導向，自由前後翻閱、標記疑難題目，交卷後提供完整詳析。</p>
+                  <p class="mode-desc">自主練習導向，支援一鍵題目與選項中文翻譯（不含詳解）、自由翻閱與標記，交卷後提供完整詳析。</p>
                 </div>
               </label>
 
@@ -200,7 +200,7 @@
                     <span class="mode-icon">⏱️</span>
                     <strong class="mode-title">正式測驗 (Exam)</strong>
                   </div>
-                  <p class="mode-desc">模擬正式考試，計制作答時間，交卷前嚴格防護答案，提供分章績效診斷。</p>
+                  <p class="mode-desc">模擬正式考試，計時作答並停用翻譯輔助，交卷前嚴格防護答案，提供分章績效診斷。</p>
                 </div>
               </label>
             </div>
@@ -237,6 +237,10 @@
                 <span class="timer-icon">⏱️</span>
                 <span id="quiz-timer" class="timer-text">00:00</span>
               </div>
+              <button type="button" id="btn-translate-q" class="btn-translate" title="一鍵將題目與選項翻譯為繁體中文（僅限練習模式，快速鍵: T）">
+                <span class="translate-icon">🌐</span>
+                <span id="translate-text" class="translate-label">中文翻譯</span>
+              </button>
               <button type="button" id="btn-flag-q" class="btn-flag" title="標記本題以便稍後回顧 (快速鍵: F)">
                 <span class="flag-icon">🚩</span>
                 <span id="flag-text" class="flag-label">標記此題</span>
@@ -260,7 +264,10 @@
           <div class="question-stem-container">
             <div class="stem-header">
               <span class="stem-number-badge">Q<span id="stem-q-number">1</span></span>
-              <div id="question-stem" class="stem-text">題目載入中...</div>
+              <div class="stem-body-wrap">
+                <div id="question-stem" class="stem-text">題目載入中...</div>
+                <div id="question-stem-zh" class="stem-text-zh hidden" aria-live="polite"></div>
+              </div>
             </div>
           </div>
 
@@ -307,6 +314,8 @@
           <span class="shortcut-item"><kbd>→</kbd> / <kbd>N</kbd> 下一題</span>
           <span class="shortcut-divider">|</span>
           <span class="shortcut-item"><kbd>F</kbd> 標記/取消標記</span>
+          <span id="shortcut-translate-divider" class="shortcut-divider">|</span>
+          <span id="shortcut-translate-hint" class="shortcut-item"><kbd>T</kbd> 中文翻譯</span>
         </footer>
 
       </div>
